@@ -42,16 +42,16 @@ def chromosome_fitness(chromosome, cities):
         else:
             cur_dist = euc_dist(last_city, cities[city])
             sum_dist += cur_dist
-    return 0 - sum_dist # negative distance for maximize the score
+    return sum_dist # negative distance for maximize the score
 
 
 
 def selection(population_scores_dict):
-    sum_of_scores = sum(population_scores_dict.values())
-    pick = random.uniform(sum_of_scores, 0)
-    current = sum_of_scores
+    sum_of_scores = sum([1/s for s in population_scores_dict.values() ])
+    pick = random.uniform(0, sum_of_scores)
+    current = 0
     for chromosome, score in population_scores_dict.items():
-        current -= score
+        current += 1 / score
         if current > pick:
             return chromosome
 
@@ -70,6 +70,50 @@ def singlepoint_crossover_one_chrom(parent1, parent2, point):
         raise("Error singlepoint_crossover_one_chrom implementation. not a vaild solution")
     return offspring
 
+def twopoint_crossover_one_chrom(parent1, parent2, point1, point2):
+    offspring = [None] * len(parent1)
+    # get parent1 gens
+    offspring[:point1] = parent1[:point1]
+    offspring[point2:] = parent1[point2:]
+    # get parent2 gens
+    for i in range(point1, point2):
+        if parent2[i] in offspring:
+            continue
+        else:
+            offspring[1] = parent2[i]
+    # complete for a valid solution
+    if None in offspring:
+        none_idxes = [i for i in range(len(offspring)) if offspring[i] is None]
+        j = 0
+        for city in CITIES_LIST:
+            if city not in offspring:
+                offspring[none_idxes[j]] = city
+                j += 1
+    if sum(offspring) != sum(CITIES_LIST):
+        raise("Error singlepoint_crossover_one_chrom implementation. not a vaild solution")
+    return offspring
+
+
+def twopoints_crossover(parent1, parent2, rate="random"):
+    """
+
+    :param parent1: first parent
+    :param parent2: second parent
+    :param rate: where to cut the parents for crossover
+    :return:
+    """
+    if rate == "random":
+        point1 = random.randint(0, len(parent1)-1)
+        point2 = random.randint(point1, len(parent1))
+    else:
+        point1 = rate[0] / len(parent1)
+        point2 = rate[1] / len(parent1)
+
+    parent1 = list(parent1)
+    parent2 = list(parent2)
+    offspring1 = twopoint_crossover_one_chrom(parent1, parent2, point1, point2)
+    offspring2 = twopoint_crossover_one_chrom(parent2, parent1, point1, point2)
+    return tuple(offspring1), tuple(offspring2)
 
 def singlepoint_crossover(parent1, parent2, rate="random"):
     if rate == "random":
@@ -79,12 +123,11 @@ def singlepoint_crossover(parent1, parent2, rate="random"):
 
     parent1 = list(parent1)
     parent2 = list(parent2)
-    singlepoint_crossover_one_chrom(parent1, parent2, single_point)
-    offspring1 = parent1[:single_point] + parent2[single_point:]
-    offspring2 = parent2[:single_point] + parent1[single_point:]
+    offspring1 = singlepoint_crossover_one_chrom(parent1, parent2, single_point)
+    offspring2 = singlepoint_crossover_one_chrom(parent2, parent1, single_point)
     return tuple(offspring1), tuple(offspring2)
 
-def crossover(parent1, parent2, crossover_type=singlepoint_crossover, rate="random"):
+def crossover(parent1, parent2, crossover_type="single_point", rate="random"):
     """
 
     :param parent1: first parent (tuple)
@@ -93,7 +136,10 @@ def crossover(parent1, parent2, crossover_type=singlepoint_crossover, rate="rand
     :param rate: rate for crossover
     :return: two children
     """
-    return crossover_type(parent1, parent2, rate=rate)
+    if crossover_type == "single_point":
+        return singlepoint_crossover(parent1, parent2, rate=rate)
+    if crossover_type == "two_points":
+        return twopoints_crossover(parent1, parent2, rate=rate)
 
 
 def mutation(offspring1, offspring2, rate=0.4):
@@ -101,8 +147,9 @@ def mutation(offspring1, offspring2, rate=0.4):
     offspring2 = list(offspring2)
     for i in range(len(offspring1)):
         if random.random() < rate: # to do mutation both children
-            offspring1[i] = random.randint(0, 7)
-            offspring2[i] = random.randint(0, 7)
+            swip_index = random.randint(0, len(CITIES_LIST)-1) # choose index to swip
+            offspring1[i], offspring1[swip_index] = offspring1[swip_index], offspring1[i]
+            offspring2[i], offspring2[swip_index] = offspring2[swip_index], offspring2[i]
     return tuple(offspring1), tuple(offspring2)
 
 
@@ -117,31 +164,36 @@ def alitism(popul_scores_dict, p=0.1):
     :param p: float (percentage) how many besh chromosoms to pass to the next generation.
     :return: list of best chromosoms
     """
-    n_best = int(p * len(popul_scores_dict))
-    sorted_popul = sorted(popul_scores_dict.items(), key=lambda item: item[1], reverse=True)
+    n_best = int(p * len(popul_scores_dict)) + 1 # p << 1
+    sorted_popul = sorted(popul_scores_dict.items(), key=lambda item: item[1], reverse=False)
     best = sorted_popul[:n_best]
     best_rep = [s[0] for s in best] # save the representation of each solution from the best ones
     return best_rep
 
 
+def check_valid_child(offspring):
+    return len(np.unique(offspring)) == len(CITIES_LIST)
 
-
-def run_algorithm(cities, population_size, crossover_type, crossover_rate, mutation_rate, max_iter):
+def run_algorithm(cities, population_size, crossover_type, crossover_rate, mutation_rate, max_iter,
+                  p_alitism):
     generation = 0
     population = generate_population(population_size)
     scores = population_fitness(population, cities)
     population_scores_dict = create_population_scores_dict(population, scores)
+    best_score = max(population_scores_dict.values())
     # best_score = max(population_scores_dict.values())
 
     while generation <= max_iter:
-        print(population)
+        # print(population)
         new_population = []
-        new_population.extend(alitism(population_scores_dict))
-        for _ in range(int(len(population) - len(new_population) / 2)): # run all population except the alitism we pass
+        new_population.extend(alitism(population_scores_dict, p=p_alitism))
+        remain_offstrings = len(population) - len(new_population)
+        for i in range(remain_offstrings // 2): # run all population except the alitism we pass
             parent1 = selection(population_scores_dict)
             parent2 = selection(population_scores_dict)
             offspring1, offspring2 = crossover(parent1, parent2, crossover_type=crossover_type, rate=crossover_rate)
             offspring1, offspring2 = mutation(offspring1, offspring2, rate=mutation_rate)
+            assert(check_valid_child(offspring1) and check_valid_child(offspring2))
             new_population.append(offspring1)
             new_population.append(offspring2)
             if len(new_population) == population_size:
@@ -151,21 +203,28 @@ def run_algorithm(cities, population_size, crossover_type, crossover_rate, mutat
         new_scores = population_fitness(new_population, cities)
         population_scores_dict = create_population_scores_dict(
             new_population, new_scores)
-        best_score = max(population_scores_dict.values())
+        best_score_new = min(population_scores_dict.values())
+        if best_score_new > best_score:
+            print("hi")
+        else:
+            best_score = best_score_new
         best_chromosome = get_key(population_scores_dict, best_score)
         print(f"chromosome: {best_chromosome} score: {best_score}")
         generation += 1
+        avg_score = sum([v for k,v in population_scores_dict.items()]) / len(population_scores_dict)
+        print(f"avg score is: {avg_score}")
 
-    return population_scores_dict, generation
+    return population_scores_dict, 0 - best_score
 
 
 if __name__ == "__main__":
     config = {
-        "population_size" : 5,
-        "crossover_type": singlepoint_crossover,
+        "population_size" : 100,
+        "crossover_type": "two_points",
         "crossover_rate": "random",
-        "mutation_rate": 0.4,
-        "max_iter": 100
+        "mutation_rate": 0.1,
+        "max_iter": 1000,
+        "p_alitism": 0.05
     }
     cities = np.loadtxt("./tsp.txt")
     population, best_score = run_algorithm(cities, **config)
