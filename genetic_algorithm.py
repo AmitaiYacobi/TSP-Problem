@@ -44,6 +44,8 @@ def chromosome_fitness(chromosome, cities):
             cur_dist = euc_dist(last_city, cities[city])
             last_city = cities[city]
             sum_dist += cur_dist
+    # return to for city
+    sum_dist += euc_dist(last_city, cities[chromosome[0]])
     return sum_dist # negative distance for maximize the score
 
 
@@ -53,7 +55,7 @@ def selection(population_scores_dict):
     pick = random.uniform(0, sum_of_scores)
     current = 0
     for chromosome, score in population_scores_dict.items():
-        current += 1 / score
+        current += (1 / score)
         if current > pick:
             return chromosome
 
@@ -92,7 +94,7 @@ def twopoint_crossover_one_chrom(parent1, parent2, point1, point2):
                 offspring[none_idxes[j]] = city
                 j += 1
     if sum(offspring) != sum(CITIES_LIST):
-        raise("Error singlepoint_crossover_one_chrom implementation. not a vaild solution")
+        raise("Error twopoint_crossover_one_chrom implementation. not a vaild solution")
     return offspring
 
 
@@ -108,8 +110,8 @@ def twopoints_crossover(parent1, parent2, rate="random"):
         point1 = random.randint(0, len(parent1)-1)
         point2 = random.randint(point1, len(parent1))
     else:
-        point1 = rate[0] / len(parent1)
-        point2 = rate[1] / len(parent1)
+        point1 = int(rate[0] * len(parent1))
+        point2 = int(rate[1] * len(parent1))
 
     parent1 = list(parent1)
     parent2 = list(parent2)
@@ -159,7 +161,7 @@ def create_population_scores_dict(population, scores):
     return {tuple(population[i]): scores[i] for i in range(len(scores))}
 
 
-def alitism(popul_scores_dict, p=0.1):
+def elitism(popul_scores_dict, p=0.1):
     """
 
     :param popul_scores_dict: key: chromosom, value: score
@@ -177,21 +179,20 @@ def check_valid_child(offspring):
     return len(np.unique(offspring)) == len(CITIES_LIST)
 
 def run_algorithm(cities, population_size, crossover_type, crossover_rate, mutation_rate, max_iter,
-                  p_alitism):
+                  p_elitism):
     generation = 0
     population = generate_population(population_size)
     scores = population_fitness(population, cities)
     population_scores_dict = create_population_scores_dict(population, scores)
     best_score = max(population_scores_dict.values())
-    # best_score = max(population_scores_dict.values())
     avgs = []
 
     while generation <= max_iter:
         # print(population)
         new_population = []
-        new_population.extend(alitism(population_scores_dict, p=p_alitism))
+        new_population.extend(elitism(population_scores_dict, p=p_elitism))
         remain_offstrings = len(population) - len(new_population)
-        for i in range(remain_offstrings // 2): # run all population except the alitism we pass
+        for i in range(remain_offstrings // 2): # run all population except the elitism we pass
             parent1 = selection(population_scores_dict)
             parent2 = selection(population_scores_dict)
             offspring1, offspring2 = crossover(parent1, parent2, crossover_type=crossover_type, rate=crossover_rate)
@@ -208,7 +209,7 @@ def run_algorithm(cities, population_size, crossover_type, crossover_rate, mutat
             new_population, new_scores)
         best_score_new = min(population_scores_dict.values())
         if best_score_new > best_score:
-            print("hi")
+            print("bug!")
         else:
             best_score = best_score_new
         best_chromosome = get_key(population_scores_dict, best_score)
@@ -225,12 +226,12 @@ def run_algorithm(cities, population_size, crossover_type, crossover_rate, mutat
 
 if __name__ == "__main__":
     config = {
-        "population_size" : 100,
+        "population_size" : 500,
         "crossover_type": "two_points",
         "crossover_rate": "random",
         "mutation_rate": 0.2,
         "max_iter": 10000,
-        "p_alitism": 0.5
+        "p_elitism": 0.5
     }
     cities = np.loadtxt("./tsp.txt")
     population, best_score = run_algorithm(cities, **config)
