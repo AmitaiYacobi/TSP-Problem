@@ -1,5 +1,6 @@
 import random
 import numpy as np
+import matplotlib.pyplot as plt
 
 # MAX_SCORE = 28
 CITIES_LIST = np.arange(0, 48)
@@ -41,6 +42,7 @@ def chromosome_fitness(chromosome, cities):
             last_city = cities[city]
         else:
             cur_dist = euc_dist(last_city, cities[city])
+            last_city = cities[city]
             sum_dist += cur_dist
     return sum_dist # negative distance for maximize the score
 
@@ -80,7 +82,7 @@ def twopoint_crossover_one_chrom(parent1, parent2, point1, point2):
         if parent2[i] in offspring:
             continue
         else:
-            offspring[1] = parent2[i]
+            offspring[i] = parent2[i]
     # complete for a valid solution
     if None in offspring:
         none_idxes = [i for i in range(len(offspring)) if offspring[i] is None]
@@ -182,6 +184,7 @@ def run_algorithm(cities, population_size, crossover_type, crossover_rate, mutat
     population_scores_dict = create_population_scores_dict(population, scores)
     best_score = max(population_scores_dict.values())
     # best_score = max(population_scores_dict.values())
+    avgs = []
 
     while generation <= max_iter:
         # print(population)
@@ -212,9 +215,12 @@ def run_algorithm(cities, population_size, crossover_type, crossover_rate, mutat
         print(f"chromosome: {best_chromosome} score: {best_score}")
         generation += 1
         avg_score = sum([v for k,v in population_scores_dict.items()]) / len(population_scores_dict)
-        print(f"avg score is: {avg_score}")
+        # print(f"avg score is: {avg_score}")
+        avgs.append(avg_score)
 
-    return population_scores_dict, 0 - best_score
+    plt.plot(avgs)
+    plt.show()
+    return population_scores_dict, best_score
 
 
 if __name__ == "__main__":
@@ -222,9 +228,9 @@ if __name__ == "__main__":
         "population_size" : 100,
         "crossover_type": "two_points",
         "crossover_rate": "random",
-        "mutation_rate": 0.1,
-        "max_iter": 1000,
-        "p_alitism": 0.05
+        "mutation_rate": 0.2,
+        "max_iter": 10000,
+        "p_alitism": 0.5
     }
     cities = np.loadtxt("./tsp.txt")
     population, best_score = run_algorithm(cities, **config)
